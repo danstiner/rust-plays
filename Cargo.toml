@@ -1,0 +1,9 @@
+[package]
+name = "plays"
+version = "0.1.0"
+authors = ["Daniel Stiner <daniel.stiner@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
