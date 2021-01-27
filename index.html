@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type = "text/javascript">
+        let socket = new WebSocket("ws://localhost:8080");
+
+        socket.onopen = function(e) {
+            console.log("[open] Connection established");
+
+            function send(payload) {
+                socket.send(JSON.stringify(payload));
+            }
+
+            function onmouse(e) {
+                send({
+                    type: "Mouse",
+                    x: e.clientX / window.innerWidth,
+                    y: e.clientY / window.innerHeight,
+                    b: e.buttons,
+                });
+            };
+            onmousemove = onmouse;
+            onmousedown = onmouse;
+            onmouseup = onmouse;
+
+            onkeydown = function(e) {
+                const code = e.code;
+                socket.send(JSON.stringify({
+                    "type": "KeyDown",
+                    code,
+                }));
+            };
+
+            onkeyup = function(e) {
+                const code = e.code;
+                socket.send(JSON.stringify({
+                    "type": "KeyUp",
+                    code,
+                }));
+            };
+        };
+
+        socket.onmessage = function(event) {
+            console.log(`[message] Data received from server: ${event.data}`);
+        };
+
+        socket.onclose = function(event) {
+            if (event.wasClean) {
+                console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+            } else {
+                // e.g. server process killed or network down
+                // event.code is usually 1006 in this case
+                console.log('[close] Connection died');
+            }
+        };
+
+        socket.onerror = function(error) {
+            console.log(`[error] ${error.message}`);
+        };
+    </script>
+</head>
+<body>
+
+</body>
+</html>
