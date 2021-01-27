@@ -86,6 +86,11 @@ fn main() {
                             let y = (y * h).round() as i32;
                             if input_enabled && mouse_enabled {
                                 enigo.mouse_move_to(x, y);
+                                if get_bit_at(b, 0) {
+                                    enigo.mouse_down(enigo::MouseButton::Left)
+                                } else {
+                                    enigo.mouse_up(enigo::MouseButton::Left)
+                                }
                             }
                         }
                         Ok(Input::KeyDown { code }) => {
@@ -137,5 +142,13 @@ fn translate_key_code(code: &str) -> Option<Key> {
         "Digit8" => Some(Key::Layout('8')),
         "Digit9" => Some(Key::Layout('9')),
         _ => None
+    }
+}
+
+fn get_bit_at(input: u16, n: u8) -> bool {
+    if n < 16 {
+        input & (1 << n) != 0
+    } else {
+        false
     }
 }
