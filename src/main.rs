@@ -41,7 +41,6 @@ fn main() {
             hotkey::modifiers::SHIFT,
             hotkey::keys::ESCAPE,
             move || {
-                println!("Escape pressed!");
                 let input_enabled_old = input_enabled_clone.fetch_xor(true, Ordering::Relaxed);
                 info!(log_clone, "Toggle input enabled"; "input_enabled" => !input_enabled_old);
             },
