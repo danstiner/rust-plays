@@ -55,6 +55,8 @@ fn main() {
         let log = log.new(o!("peer" => stream.peer_addr().unwrap()));
         let input_enabled = Arc::clone(&input_enabled);
 
+        info!(log, "Incoming connection");
+
         spawn (move || {
             let mut enigo = Enigo::new();
             let mut websocket = accept(stream).unwrap();
