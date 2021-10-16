@@ -10,7 +10,6 @@ use hotkey;
 use serde::{Deserialize, Serialize};
 use slog::Drain;
 use std::net::TcpListener;
-use std::sync::mpsc::channel;
 use std::thread::spawn;
 use tungstenite::server::accept;
 
@@ -42,7 +41,7 @@ fn main() {
     let drain = slog_async::Async::new(drain).build().fuse();
     let log = slog::Logger::root(drain, o!());
 
-    let (tx, rx) = channel();
+    let (tx, rx) = crossbeam_channel::bounded(0);
 
     let tx_clone = tx.clone();
     spawn(move || {
