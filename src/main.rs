@@ -5,11 +5,11 @@ extern crate slog_async;
 extern crate slog_term;
 
 use conv::*;
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use enigo::{Enigo, Key, KeyboardControllable, MouseControllable};
 use hotkey;
 use serde::{Deserialize, Serialize};
-use slog::Drain;
+use slog::{Drain, Logger};
 use std::net::TcpListener;
 use std::thread::{JoinHandle, spawn};
 use tungstenite::server::accept;
@@ -46,7 +46,22 @@ fn main() {
 
     register_hotkeys(tx.clone());
 
-    let log_clone = log.new(o!());
+    action_handler(rx, log.clone());
+
+    websocket_listener(tx, log);
+}
+
+fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
+    spawn(move || {
+        let mut hk = hotkey::Listener::new();
+        hk.register_hotkey(hotkey::modifiers::SHIFT, hotkey::keys::ESCAPE, move || {
+            tx.send(Action::ToggleInput).unwrap();
+        }).unwrap();
+        hk.listen();
+    })
+}
+
+fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
     spawn(move || {
         let mut enigo = Enigo::new();
         let mut input_enabled: bool = true;
@@ -89,12 +104,14 @@ fn main() {
                 }
                 Action::ToggleInput => {
                     input_enabled = !input_enabled;
-                    info!(log_clone, "Toggle input enabled"; "input_enabled" => input_enabled);
+                    info!(log, "Toggle input enabled"; "input_enabled" => input_enabled);
                 }
             }
         }
-    });
+    })
+}
 
+fn websocket_listener(tx: Sender<Action>, log: Logger) {
     let server = TcpListener::bind("0.0.0.0:8090").unwrap();
     for stream in server.incoming() {
         let tx = tx.clone();
@@ -148,16 +165,6 @@ fn main() {
             }
         });
     }
-}
-
-fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
-    spawn(move || {
-        let mut hk = hotkey::Listener::new();
-        hk.register_hotkey(hotkey::modifiers::SHIFT, hotkey::keys::ESCAPE, move || {
-            tx.send(Action::ToggleInput).unwrap();
-        }).unwrap();
-        hk.listen();
-    })
 }
 
 fn translate_key_code(code: &str) -> Option<Key> {
