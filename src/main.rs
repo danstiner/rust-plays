@@ -34,7 +34,7 @@ enum Action {
     ToggleInput,
 }
 
-const mouse_enabled: bool = false;
+const MOUSE_ENABLED: bool = false;
 
 fn main() {
     let decorator = slog_term::TermDecorator::new().build();
@@ -80,7 +80,7 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
 
                     let x = (x_percentage * w).round() as i32;
                     let y = (y_percentage * h).round() as i32;
-                    if input_enabled && mouse_enabled {
+                    if input_enabled && MOUSE_ENABLED {
                         enigo.mouse_move_to(x, y);
 
                         if left_button_down {
