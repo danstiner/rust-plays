@@ -15,10 +15,10 @@
 
             function onmouse(e) {
                 send({
-                    type: "Mouse",
-                    x: e.clientX / window.innerWidth,
-                    y: e.clientY / window.innerHeight,
-                    b: e.buttons,
+                    type: "AbsMouse",
+                    xp: e.clientX / window.innerWidth,
+                    yp: e.clientY / window.innerHeight,
+                    btns: e.buttons,
                 });
             };
             onmousemove = onmouse;

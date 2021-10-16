@@ -5,110 +5,151 @@ extern crate slog_async;
 extern crate slog_term;
 
 use conv::*;
-use enigo::{Enigo, MouseControllable, KeyboardControllable, Key};
+use enigo::{Enigo, Key, KeyboardControllable, MouseControllable};
 use hotkey;
-use std::net::TcpListener;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::spawn;
-use tungstenite::server::accept;
-use tungstenite::Message;
 use serde::{Deserialize, Serialize};
 use slog::Drain;
+use std::net::TcpListener;
+use std::sync::mpsc::channel;
+use std::thread::spawn;
+use tungstenite::server::accept;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
-enum Input {
-    Mouse {x: f64, y: f64, b: u16},
+enum ClientInput {
+    AbsMouse { xp: f64, yp: f64, btns: u16 },
     KeyDown { code: String },
     KeyUp { code: String },
 }
 
-fn main() {
-    let input_enabled  = Arc::new(AtomicBool::new(true));
-    let mouse_enabled = false;
+enum Action {
+    AbsMouse {
+        x_percentage: f64,
+        y_percentage: f64,
+        left_button_down: bool,
+        right_button_down: bool,
+    },
+    KeyDown(enigo::Key),
+    KeyUp(enigo::Key),
+    ToggleInput,
+}
 
+const mouse_enabled: bool = false;
+
+fn main() {
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let drain = slog_async::Async::new(drain).build().fuse();
     let log = slog::Logger::root(drain, o!());
 
-    let input_enabled_clone = Arc::clone(&input_enabled);
-    let log_clone = log.new(o!());
-    spawn (move || {
+    let (tx, rx) = channel();
+
+    let tx_clone = tx.clone();
+    spawn(move || {
         let mut hk = hotkey::Listener::new();
-        hk.register_hotkey(
-            hotkey::modifiers::SHIFT,
-            hotkey::keys::ESCAPE,
-            move || {
-                let input_enabled_old = input_enabled_clone.fetch_xor(true, Ordering::Relaxed);
-                info!(log_clone, "Toggle input enabled"; "input_enabled" => !input_enabled_old);
-            },
-        )
-            .unwrap();
+        hk.register_hotkey(hotkey::modifiers::SHIFT, hotkey::keys::ESCAPE, move || {
+            tx_clone.send(Action::ToggleInput).unwrap();
+        })
+        .unwrap();
         hk.listen();
+    });
+
+    let log_clone = log.new(o!());
+    spawn(move || {
+        let mut enigo = Enigo::new();
+        let mut input_enabled: bool = true;
+
+        for action in rx {
+            match action {
+                Action::AbsMouse {
+                    x_percentage,
+                    y_percentage,
+                    left_button_down,
+                    right_button_down,
+                } => {
+                    let (ws, hs) = Enigo::main_display_size();
+                    let w = f64::value_from(ws).unwrap();
+                    let h = f64::value_from(hs).unwrap();
+
+                    let x = (x_percentage * w).round() as i32;
+                    let y = (y_percentage * h).round() as i32;
+                    if input_enabled && mouse_enabled {
+                        enigo.mouse_move_to(x, y);
+
+                        if left_button_down {
+                            enigo.mouse_down(enigo::MouseButton::Left)
+                        } else {
+                            enigo.mouse_up(enigo::MouseButton::Left)
+                        }
+
+                        if right_button_down {
+                            enigo.mouse_down(enigo::MouseButton::Right)
+                        } else {
+                            enigo.mouse_up(enigo::MouseButton::Right)
+                        }
+                    }
+                }
+                Action::KeyDown(key) => {
+                    enigo.key_down(key);
+                }
+                Action::KeyUp(key) => {
+                    enigo.key_up(key);
+                }
+                Action::ToggleInput => {
+                    input_enabled = !input_enabled;
+                    info!(log_clone, "Toggle input enabled"; "input_enabled" => input_enabled);
+                }
+            }
+        }
     });
 
     let server = TcpListener::bind("0.0.0.0:8090").unwrap();
     for stream in server.incoming() {
+        let tx = tx.clone();
         let stream = stream.unwrap();
         let log = log.new(o!("peer" => stream.peer_addr().unwrap()));
-        let input_enabled = Arc::clone(&input_enabled);
 
         info!(log, "Incoming connection");
 
-        spawn (move || {
-            let mut enigo = Enigo::new();
+        spawn(move || {
             let mut websocket = accept(stream).unwrap();
             loop {
                 let msg = websocket.read_message().unwrap();
 
                 if msg.is_ping() {
-                    websocket.write_message(Message::Pong(msg.into_data())).unwrap();
+                    // Do nothing, pings are handled automatically
                 } else if msg.is_binary() {
-                    info!(log, "Binary message");
+                    info!(log, "Unexpected binary message");
                 } else if msg.is_text() {
-                    let input: serde_json::error::Result<Input> = serde_json::from_str(msg.to_text().unwrap());
-
-                    let input_enabled= input_enabled.load(Ordering::Relaxed);
-                    if !input_enabled {
-                        continue
-                    }
+                    let input: serde_json::error::Result<ClientInput> =
+                        serde_json::from_str(msg.to_text().unwrap());
 
                     match input {
-                        Ok(Input::Mouse { x, y, b: _ }) => {
-
-                            let (ws, hs) = Enigo::main_display_size();
-                            let w = f64::value_from(ws).unwrap();
-                            let h = f64::value_from(hs).unwrap();
-
-                            let x = (x * w).round() as i32;
-                            let y = (y * h).round() as i32;
-                            if input_enabled && mouse_enabled {
-                                enigo.mouse_move_to(x, y);
-                                if get_bit_at(b, 0) {
-                                    enigo.mouse_down(enigo::MouseButton::Left)
-                                } else {
-                                    enigo.mouse_up(enigo::MouseButton::Left)
-                                }
-                            }
+                        Ok(ClientInput::AbsMouse { xp, yp, btns }) => {
+                            tx.send(Action::AbsMouse {
+                                x_percentage: xp,
+                                y_percentage: yp,
+                                left_button_down: get_bit_at(btns, 0),
+                                right_button_down: get_bit_at(btns, 1),
+                            })
+                            .unwrap();
                         }
-                        Ok(Input::KeyDown { code }) => {
+                        Ok(ClientInput::KeyDown { code }) => {
                             if let Some(key) = translate_key_code(&code) {
-                                enigo.key_down(key);
+                                tx.send(Action::KeyDown(key)).unwrap();
                             } else {
                                 warn!(log, "Unsupported key"; "code" => code)
                             }
                         }
-                        Ok(Input::KeyUp { code }) => {
+                        Ok(ClientInput::KeyUp { code }) => {
                             if let Some(key) = translate_key_code(&code) {
-                                enigo.key_up(key);
+                                tx.send(Action::KeyUp(key)).unwrap();
                             } else {
                                 warn!(log, "Unsupported key"; "code" => code)
                             }
                         }
                         Err(err) => {
-                                warn!(log, "Bad input"; "text" => msg.to_text().unwrap(), "err" => err.to_string());
+                            warn!(log, "Bad input"; "text" => msg.to_text().unwrap(), "err" => err.to_string());
                         }
                     }
                 }
@@ -141,7 +182,7 @@ fn translate_key_code(code: &str) -> Option<Key> {
         "Digit7" => Some(Key::Layout('7')),
         "Digit8" => Some(Key::Layout('8')),
         "Digit9" => Some(Key::Layout('9')),
-        _ => None
+        _ => None,
     }
 }
 
