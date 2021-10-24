@@ -10,7 +10,7 @@ use enigo::{Enigo, Key, KeyboardControllable, MouseControllable};
 use hotkey;
 use serde::{Deserialize, Serialize};
 use slog::{Drain, Logger};
-use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener};
 use std::thread::{JoinHandle, spawn};
 use tungstenite::server::accept;
 
@@ -48,7 +48,7 @@ fn main() {
 
     action_handler(rx, log.clone());
 
-    websocket_listener(tx, log);
+    websocket_listener("0.0.0.0:8090".parse().unwrap(), tx, log);
 }
 
 fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
@@ -111,8 +111,8 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
     })
 }
 
-fn websocket_listener(tx: Sender<Action>, log: Logger) {
-    let server = TcpListener::bind("0.0.0.0:8090").unwrap();
+fn websocket_listener(address: SocketAddr, tx: Sender<Action>, log: Logger) {
+    let server = TcpListener::bind(address).unwrap();
     for stream in server.incoming() {
         let tx = tx.clone();
         let stream = stream.unwrap();
