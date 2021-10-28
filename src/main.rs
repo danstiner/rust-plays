@@ -4,28 +4,27 @@ extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 
-use conv::*;
 use crossbeam_channel::{Receiver, Sender};
 use enigo::{Enigo, Key, KeyboardControllable, MouseControllable};
 use hotkey;
 use serde::{Deserialize, Serialize};
 use slog::{Drain, Logger};
 use std::net::{SocketAddr, TcpListener};
-use std::thread::{JoinHandle, spawn};
+use std::thread::{spawn, JoinHandle};
 use tungstenite::server::accept;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 enum ClientInput {
-    AbsMouse { xp: f64, yp: f64, btns: u16 },
+    Mouse { dx: i32, dy: i32, btns: u16 },
     KeyDown { code: String },
     KeyUp { code: String },
 }
 
 enum Action {
-    AbsMouse {
-        x_percentage: f64,
-        y_percentage: f64,
+    Mouse {
+        delta_x: i32,
+        delta_y: i32,
         left_button_down: bool,
         right_button_down: bool,
     },
@@ -56,7 +55,8 @@ fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
         let mut hk = hotkey::Listener::new();
         hk.register_hotkey(hotkey::modifiers::SHIFT, hotkey::keys::ESCAPE, move || {
             tx.send(Action::ToggleInput).unwrap();
-        }).unwrap();
+        })
+        .unwrap();
         hk.listen();
     })
 }
@@ -68,20 +68,18 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
 
         for action in rx {
             match action {
-                Action::AbsMouse {
-                    x_percentage,
-                    y_percentage,
+                Action::Mouse {
+                    delta_x,
+                    delta_y,
                     left_button_down,
                     right_button_down,
                 } => {
-                    let (ws, hs) = Enigo::main_display_size();
-                    let w = f64::value_from(ws).unwrap();
-                    let h = f64::value_from(hs).unwrap();
+                    let (w, h) = Enigo::main_display_size();
+                    let (mx, my) = Enigo::mouse_location();
+                    debug!(log, "mouse"; "dx" => delta_x, "dy"=>delta_y, "lb"=>left_button_down, "rb"=>right_button_down, "x"=>mx, "y"=>my);
 
-                    let x = (x_percentage * w).round() as i32;
-                    let y = (y_percentage * h).round() as i32;
                     if input_enabled && MOUSE_ENABLED {
-                        enigo.mouse_move_to(x, y);
+                        enigo.mouse_move_relative(delta_x, delta_y);
 
                         if left_button_down {
                             enigo.mouse_down(enigo::MouseButton::Left)
@@ -97,9 +95,11 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
                     }
                 }
                 Action::KeyDown(key) => {
+                    debug!(log, "key_down"; "key"=>format!("{:?}", key));
                     enigo.key_down(key);
                 }
                 Action::KeyUp(key) => {
+                    debug!(log, "key_up"; "key"=>format!("{:?}", key));
                     enigo.key_up(key);
                 }
                 Action::ToggleInput => {
@@ -134,10 +134,10 @@ fn websocket_listener(address: SocketAddr, tx: Sender<Action>, log: Logger) {
                         serde_json::from_str(msg.to_text().unwrap());
 
                     match input {
-                        Ok(ClientInput::AbsMouse { xp, yp, btns }) => {
-                            tx.send(Action::AbsMouse {
-                                x_percentage: xp,
-                                y_percentage: yp,
+                        Ok(ClientInput::Mouse { dx, dy, btns }) => {
+                            tx.send(Action::Mouse {
+                                delta_x: dx,
+                                delta_y: dy,
                                 left_button_down: get_bit_at(btns, 0),
                                 right_button_down: get_bit_at(btns, 1),
                             })
