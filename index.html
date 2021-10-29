@@ -43,8 +43,10 @@ canvas {
             contex.fill();
         }
 
-        canvas.onclick = function() {
-            canvas.requestPointerLock();
+        canvas.onclick = function(e) {
+            if (document.pointerLockElement !== canvas) {
+                canvas.requestPointerLock();
+            }
         };
 
         document.addEventListener('pointerlockchange', lockChangeAlert, false);
@@ -55,6 +57,7 @@ canvas {
                 document.addEventListener("mousemove", mouseMoved, false);
                 document.addEventListener("mouseup", mouseMoved, false);
                 document.addEventListener("mousedown", mouseMoved, false);
+                drawPointer(canvas.width / 2, canvas.height / 2);
             } else {
                 console.log('The pointer lock status is now unlocked');  
                 document.removeEventListener("mousemove", mouseMoved, false);
@@ -64,6 +67,7 @@ canvas {
         }
 
         function mouseMoved(e) {
+            console.log("mouse moved", e);
             send({
                 type: "Mouse",
                 dx: e.movementX,

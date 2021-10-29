@@ -88,6 +88,9 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
         let mut input_enabled: bool = true;
         let mut input_combiner = input_combiner::InputCombiner::new();
         let (mut last_mouse_x, mut last_mouse_y) = Enigo::mouse_location();
+        let mut last_mouse_left_button_down = false;
+        let mut last_mouse_right_button_down = false;
+
 
         for action in rx {
             match action {
@@ -136,22 +139,22 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
                         warn!(log, "unexpected mouse move"; "dx"=>mx-last_mouse_x, "dy"=>last_mouse_y-my);
                     }
 
-                    if mouse_delta_x != 0 || mouse_delta_y != 0 {
+                    if mouse_delta_x != 0 || mouse_delta_y != 0 || last_mouse_left_button_down != mouse_left_button_down || last_mouse_right_button_down != mouse_right_button_down {
                         debug!(log, "step"; "dx" => mouse_delta_x, "dy"=>mouse_delta_x, "lb"=>mouse_left_button_down, "rb"=>mouse_right_button_down);
                     }
 
                     if input_enabled && MOUSE_ENABLED {
                         enigo.mouse_move_relative(mouse_delta_x, mouse_delta_y);
 
-                        if mouse_left_button_down {
+                        if mouse_left_button_down && !last_mouse_left_button_down {
                             enigo.mouse_down(enigo::MouseButton::Left)
-                        } else {
+                        } else if last_mouse_left_button_down {
                             enigo.mouse_up(enigo::MouseButton::Left)
                         }
 
-                        if mouse_right_button_down {
+                        if mouse_right_button_down && !last_mouse_right_button_down {
                             enigo.mouse_down(enigo::MouseButton::Right)
-                        } else {
+                        } else if last_mouse_right_button_down {
                             enigo.mouse_up(enigo::MouseButton::Right)
                         }
                     }
@@ -159,6 +162,8 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
                     let (mx, my) = Enigo::mouse_location();
                     last_mouse_x = mx;
                     last_mouse_y = my;
+                    last_mouse_left_button_down = mouse_left_button_down;
+                    last_mouse_right_button_down = mouse_right_button_down;
                 }
             }
         }
