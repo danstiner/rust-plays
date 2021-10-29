@@ -75,35 +75,43 @@ canvas {
 
         const WEBSOCKET_READYSTATE_OPEN = 1;
 
-        let socket = new WebSocket("ws://localhost:8090");
-
         function send(payload) {
-            if (socket.readyState === WEBSOCKET_READYSTATE_OPEN) {
+            if (socket && socket.readyState === WEBSOCKET_READYSTATE_OPEN) {
                 socket.send(JSON.stringify(payload));
             }
         }
 
-        socket.onopen = function(e) {
-            console.log("[open] Connection established");
-        };
+        let socket = undefined
 
-        socket.onmessage = function(event) {
-            console.log(`[message] Data received from server: ${event.data}`);
-        };
+        function connect() {
+            socket = new WebSocket("ws://localhost:8090");
 
-        socket.onclose = function(event) {
-            if (event.wasClean) {
-                console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
-            } else {
-                // e.g. server process killed or network down
-                // event.code is usually 1006 in this case
-                console.log('[close] Connection died');
-            }
-        };
+            socket.onopen = function(e) {
+                console.log("[open] Connection established");
+            };
 
-        socket.onerror = function(error) {
-            console.log(`[error] ${error.message}`);
-        };
+            socket.onmessage = function(event) {
+                console.log(`[message] Data received from server: ${event.data}`);
+            };
+
+            socket.onclose = function(event) {
+                if (event.wasClean) {
+                    console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+                } else {
+                    // e.g. server process killed or network down
+                    // event.code is usually 1006 in this case
+                    console.log('[close] Connection died');
+                }
+
+                setTimeout(connect, 5000);
+            };
+
+            socket.onerror = function(error) {
+                console.log(`[error] ${error.message}`);
+            };
+        }
+
+        connect();
     </script>
 </body>
 </html>
