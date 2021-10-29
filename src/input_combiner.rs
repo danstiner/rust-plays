@@ -1,7 +1,8 @@
 use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::rc::Rc;
+
+use crate::weighted_average::WeightedAverage;
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct Output {
@@ -78,35 +79,23 @@ impl InputCombiner {
         }
     }
     pub fn step(&mut self) -> Output {
-        let mut sum_mouse_delta_x: i64 = 0;
-        let mut sum_mouse_delta_y: i64 = 0;
+        let count = self.channel_data.len() as i64;
+        let mut avg_mouse_delta_x = WeightedAverage::new(count as f64);
+        let mut avg_mouse_delta_y = WeightedAverage::new(count as f64);
 
         for (_id, data) in &mut self.channel_data {
             let mut data: RefMut<ChannelData> = (**data).borrow_mut();
 
-            sum_mouse_delta_x += data.mouse_delta_x as i64;
-            sum_mouse_delta_y += data.mouse_delta_y as i64;
+            avg_mouse_delta_x.add(data.mouse_delta_x.into(), 1.0);
+            avg_mouse_delta_y.add(data.mouse_delta_y.into(), 1.0);
 
             data.mouse_delta_x = 0;
             data.mouse_delta_y = 0;
         }
 
-        // Average mouse delta
-        let count = self.channel_data.len() as i64;
-        let mouse_avg_delta_x = if count == 0 {
-            0
-        } else {
-            sum_mouse_delta_x / count
-        };
-        let mouse_avg_delta_y = if count == 0 {
-            0
-        } else {
-            sum_mouse_delta_y / count
-        };
-
         Output {
-            mouse_delta_x: mouse_avg_delta_x.try_into().unwrap_or_default(),
-            mouse_delta_y: mouse_avg_delta_y.try_into().unwrap_or_default(),
+            mouse_delta_x: avg_mouse_delta_x.average() as i32,
+            mouse_delta_y: avg_mouse_delta_y.average() as i32,
             mouse_left_button_down: false,
             mouse_right_button_down: false,
         }

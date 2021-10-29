@@ -5,6 +5,7 @@ extern crate slog_async;
 extern crate slog_term;
 
 mod input_combiner;
+mod weighted_average;
 
 use crossbeam_channel::{Receiver, Sender};
 use enigo::{Enigo, Key, KeyboardControllable, MouseControllable};
