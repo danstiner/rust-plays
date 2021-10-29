@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Default, Debug, Eq, PartialEq)]
 pub struct Output {
     pub mouse_delta_x: i32,
     pub mouse_delta_y: i32,
@@ -119,15 +119,7 @@ mod tests {
     #[test]
     fn test_step_empty() {
         let mut combiner = InputCombiner::new();
-        assert_eq!(
-            combiner.step(),
-            Output {
-                mouse_delta_x: 0,
-                mouse_delta_y: 0,
-                mouse_left_button_down: false,
-                mouse_right_button_down: false,
-            }
-        );
+        assert_eq!(combiner.step(), Default::default());
     }
 
     #[test]
@@ -143,9 +135,10 @@ mod tests {
             Output {
                 mouse_delta_x: 1,
                 mouse_delta_y: -1,
-                mouse_left_button_down: false,
-                mouse_right_button_down: false,
+                ..Default::default()
             }
         );
+
+        assert_eq!(combiner.step(), Default::default());
     }
 }
