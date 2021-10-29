@@ -2,7 +2,7 @@ use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::weighted_average::WeightedAverage;
+use crate::weighted_average::{WeightedMean, WeightedBool};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct Output {
@@ -80,14 +80,18 @@ impl InputCombiner {
     }
     pub fn step(&mut self) -> Output {
         let count = self.channel_data.len() as i64;
-        let mut avg_mouse_delta_x = WeightedAverage::new(count as f64);
-        let mut avg_mouse_delta_y = WeightedAverage::new(count as f64);
+        let mut avg_mouse_delta_x = WeightedMean::new(count as f64);
+        let mut avg_mouse_delta_y = WeightedMean::new(count as f64);
+        let mut mouse_left_button_down = WeightedBool::new(count as f64);
+        let mut mouse_right_button_down = WeightedBool::new(count as f64);
 
         for (_id, data) in &mut self.channel_data {
             let mut data: RefMut<ChannelData> = (**data).borrow_mut();
 
             avg_mouse_delta_x.add(data.mouse_delta_x.into(), 1.0);
             avg_mouse_delta_y.add(data.mouse_delta_y.into(), 1.0);
+            mouse_left_button_down.add(data.mouse_left_button_down, 1.0);
+            mouse_right_button_down.add(data.mouse_right_button_down, 1.0);
 
             data.mouse_delta_x = 0;
             data.mouse_delta_y = 0;
@@ -96,8 +100,8 @@ impl InputCombiner {
         Output {
             mouse_delta_x: avg_mouse_delta_x.average() as i32,
             mouse_delta_y: avg_mouse_delta_y.average() as i32,
-            mouse_left_button_down: false,
-            mouse_right_button_down: false,
+            mouse_left_button_down: mouse_left_button_down.average(),
+            mouse_right_button_down: mouse_right_button_down.average(),
         }
     }
 }
@@ -125,10 +129,21 @@ mod tests {
             Output {
                 mouse_delta_x: 1,
                 mouse_delta_y: -1,
+                mouse_left_button_down: true,
+                mouse_right_button_down: false,
                 ..Default::default()
             }
         );
 
-        assert_eq!(combiner.step(), Default::default());
+        assert_eq!(
+            combiner.step(),
+            Output {
+                mouse_delta_x: 0,
+                mouse_delta_y: 0,
+                mouse_left_button_down: true,
+                mouse_right_button_down: false,
+                ..Default::default()
+            }
+        );
     }
 }
