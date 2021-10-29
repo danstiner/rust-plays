@@ -132,7 +132,7 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
 
                     let (mx, my) = Enigo::mouse_location();
                     if mx != last_mouse_x || my != last_mouse_y {
-                        error!(log, "unexpected mouse move"; "dx"=>mx-last_mouse_x, "dy"=>last_mouse_y-my);
+                        warn!(log, "unexpected mouse move"; "dx"=>mx-last_mouse_x, "dy"=>last_mouse_y-my);
                     }
 
                     if mouse_delta_x != 0 || mouse_delta_y != 0 {
