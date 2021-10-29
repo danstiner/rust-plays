@@ -148,13 +148,13 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
 
                         if mouse_left_button_down && !last_mouse_left_button_down {
                             enigo.mouse_down(enigo::MouseButton::Left)
-                        } else if last_mouse_left_button_down {
+                        } else if !mouse_left_button_down && last_mouse_left_button_down {
                             enigo.mouse_up(enigo::MouseButton::Left)
                         }
 
                         if mouse_right_button_down && !last_mouse_right_button_down {
                             enigo.mouse_down(enigo::MouseButton::Right)
-                        } else if last_mouse_right_button_down {
+                        } else if !mouse_right_button_down && last_mouse_right_button_down {
                             enigo.mouse_up(enigo::MouseButton::Right)
                         }
                     }
