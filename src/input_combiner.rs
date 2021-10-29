@@ -98,10 +98,10 @@ impl InputCombiner {
         }
 
         Output {
-            mouse_delta_x: avg_mouse_delta_x.average() as i32,
-            mouse_delta_y: avg_mouse_delta_y.average() as i32,
-            mouse_left_button_down: mouse_left_button_down.average(),
-            mouse_right_button_down: mouse_right_button_down.average(),
+            mouse_delta_x: avg_mouse_delta_x.compute() as i32,
+            mouse_delta_y: avg_mouse_delta_y.compute() as i32,
+            mouse_left_button_down: mouse_left_button_down.compute(),
+            mouse_right_button_down: mouse_right_button_down.compute(),
         }
     }
 }
@@ -111,13 +111,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_step_empty() {
+    fn step_empty() {
         let mut combiner = InputCombiner::new();
         assert_eq!(combiner.step(), Default::default());
     }
 
     #[test]
-    fn test_step_single_mouse_move() {
+    fn step_single_mouse_move() {
         let mut combiner = InputCombiner::new();
 
         combiner
