@@ -4,13 +4,16 @@ extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 
+mod input_combiner;
+
 use crossbeam_channel::{Receiver, Sender};
 use enigo::{Enigo, Key, KeyboardControllable, MouseControllable};
 use hotkey;
 use serde::{Deserialize, Serialize};
 use slog::{Drain, Logger};
 use std::net::{SocketAddr, TcpListener};
-use std::thread::{spawn, JoinHandle};
+use std::thread::{self, spawn, JoinHandle};
+use std::time::Duration;
 use tungstenite::server::accept;
 
 #[derive(Serialize, Deserialize)]
@@ -23,13 +26,21 @@ enum ClientInput {
 
 enum Action {
     Mouse {
+        client_id: String,
         delta_x: i32,
         delta_y: i32,
         left_button_down: bool,
         right_button_down: bool,
     },
-    KeyDown(enigo::Key),
-    KeyUp(enigo::Key),
+    KeyDown {
+        client_id: String,
+        key: enigo::Key,
+    },
+    KeyUp {
+        client_id: String,
+        key: enigo::Key,
+    },
+    Tick,
     ToggleInput,
 }
 
@@ -43,9 +54,11 @@ fn main() {
 
     let (tx, rx) = crossbeam_channel::bounded(0);
 
+    action_handler(rx, log.clone());
+
     register_hotkeys(tx.clone());
 
-    action_handler(rx, log.clone());
+    ticker(tx.clone());
 
     websocket_listener("0.0.0.0:8090".parse().unwrap(), tx, log);
 }
@@ -61,50 +74,90 @@ fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
     })
 }
 
+fn ticker(tx: Sender<Action>) -> JoinHandle<()> {
+    spawn(move || loop {
+        thread::sleep(Duration::from_millis(100));
+        tx.send(Action::Tick).unwrap();
+    })
+}
+
 fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
     spawn(move || {
         let mut enigo = Enigo::new();
         let mut input_enabled: bool = true;
+        let mut input_combiner = input_combiner::InputCombiner::new();
+        let (mut last_mouse_x, mut last_mouse_y) = Enigo::mouse_location();
 
         for action in rx {
             match action {
                 Action::Mouse {
+                    client_id,
                     delta_x,
                     delta_y,
                     left_button_down,
                     right_button_down,
                 } => {
-                    let (w, h) = Enigo::main_display_size();
+                    let mut channel = input_combiner.channel(client_id);
+
+                    channel.mouse_move_relative(
+                        delta_x,
+                        delta_y,
+                        left_button_down,
+                        right_button_down,
+                    );
+                }
+                Action::KeyDown { client_id, key } => {
+                    let mut channel = input_combiner.channel(client_id);
+
+                    debug!(log, "key_down"; "key"=>format!("{:?}", key));
+                    channel.key_down(key);
+                }
+                Action::KeyUp { client_id, key } => {
+                    let mut channel = input_combiner.channel(client_id);
+
+                    debug!(log, "key_up"; "key"=>format!("{:?}", key));
+                    channel.key_up(key);
+                }
+                Action::ToggleInput => {
+                    input_enabled = !input_enabled;
+                    info!(log, "Toggle input enabled"; "input_enabled" => input_enabled);
+                }
+                Action::Tick => {
+                    let input_combiner::Output {
+                        mouse_delta_x,
+                        mouse_delta_y,
+                        mouse_left_button_down,
+                        mouse_right_button_down,
+                    } = input_combiner.step();
+
                     let (mx, my) = Enigo::mouse_location();
-                    debug!(log, "mouse"; "dx" => delta_x, "dy"=>delta_y, "lb"=>left_button_down, "rb"=>right_button_down, "x"=>mx, "y"=>my);
+                    if mx != last_mouse_x || my != last_mouse_y {
+                        error!(log, "unexpected mouse move"; "dx"=>mx-last_mouse_x, "dy"=>last_mouse_y-my);
+                    }
+
+                    if mouse_delta_x != 0 || mouse_delta_y != 0 {
+                        debug!(log, "step"; "dx" => mouse_delta_x, "dy"=>mouse_delta_x, "lb"=>mouse_left_button_down, "rb"=>mouse_right_button_down);
+                    }
 
                     if input_enabled && MOUSE_ENABLED {
-                        enigo.mouse_move_relative(delta_x, delta_y);
+                        enigo.mouse_move_relative(mouse_delta_x, mouse_delta_y);
 
-                        if left_button_down {
+                        if mouse_left_button_down {
                             enigo.mouse_down(enigo::MouseButton::Left)
                         } else {
                             enigo.mouse_up(enigo::MouseButton::Left)
                         }
 
-                        if right_button_down {
+                        if mouse_right_button_down {
                             enigo.mouse_down(enigo::MouseButton::Right)
                         } else {
                             enigo.mouse_up(enigo::MouseButton::Right)
                         }
                     }
-                }
-                Action::KeyDown(key) => {
-                    debug!(log, "key_down"; "key"=>format!("{:?}", key));
-                    enigo.key_down(key);
-                }
-                Action::KeyUp(key) => {
-                    debug!(log, "key_up"; "key"=>format!("{:?}", key));
-                    enigo.key_up(key);
-                }
-                Action::ToggleInput => {
-                    input_enabled = !input_enabled;
-                    info!(log, "Toggle input enabled"; "input_enabled" => input_enabled);
+
+                    let (mx, my) = Enigo::mouse_location();
+                    last_mouse_x = mx;
+                    last_mouse_y = my;
                 }
             }
         }
@@ -116,12 +169,14 @@ fn websocket_listener(address: SocketAddr, tx: Sender<Action>, log: Logger) {
     for stream in server.incoming() {
         let tx = tx.clone();
         let stream = stream.unwrap();
-        let log = log.new(o!("peer" => stream.peer_addr().unwrap()));
+        let peer_addr = stream.peer_addr().unwrap().to_string();
+        let log = log.new(o!("peer_addr" => peer_addr.clone()));
 
         info!(log, "Incoming connection");
 
         spawn(move || {
             let mut websocket = accept(stream).unwrap();
+
             loop {
                 let msg = websocket.read_message().unwrap();
 
@@ -136,6 +191,7 @@ fn websocket_listener(address: SocketAddr, tx: Sender<Action>, log: Logger) {
                     match input {
                         Ok(ClientInput::Mouse { dx, dy, btns }) => {
                             tx.send(Action::Mouse {
+                                client_id: peer_addr.clone(),
                                 delta_x: dx,
                                 delta_y: dy,
                                 left_button_down: get_bit_at(btns, 0),
@@ -145,14 +201,22 @@ fn websocket_listener(address: SocketAddr, tx: Sender<Action>, log: Logger) {
                         }
                         Ok(ClientInput::KeyDown { code }) => {
                             if let Some(key) = translate_key_code(&code) {
-                                tx.send(Action::KeyDown(key)).unwrap();
+                                tx.send(Action::KeyDown {
+                                    client_id: peer_addr.clone(),
+                                    key,
+                                })
+                                .unwrap();
                             } else {
                                 warn!(log, "Unsupported key"; "code" => code)
                             }
                         }
                         Ok(ClientInput::KeyUp { code }) => {
                             if let Some(key) = translate_key_code(&code) {
-                                tx.send(Action::KeyUp(key)).unwrap();
+                                tx.send(Action::KeyUp {
+                                    client_id: peer_addr.clone(),
+                                    key,
+                                })
+                                .unwrap();
                             } else {
                                 warn!(log, "Unsupported key"; "code" => code)
                             }
