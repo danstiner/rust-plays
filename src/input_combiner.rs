@@ -112,6 +112,7 @@ impl InputCombiner {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
