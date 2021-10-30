@@ -4,6 +4,7 @@ extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 
+mod broadcast_channel;
 mod input_combiner;
 mod weighted_average;
 
@@ -16,6 +17,7 @@ use std::net::{SocketAddr, TcpListener};
 use std::thread::{self, spawn, JoinHandle};
 use std::time::Duration;
 use tungstenite::server::accept;
+use tungstenite::Message;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -23,6 +25,17 @@ enum ClientInput {
     Mouse { dx: i32, dy: i32, btns: u16 },
     KeyDown { code: String },
     KeyUp { code: String },
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
+#[serde(tag = "type")]
+enum ClientOutput {
+    Output {
+        dx: i32,
+        dy: i32,
+        lb: bool,
+        rb: bool,
+    },
 }
 
 enum Action {
@@ -54,14 +67,15 @@ fn main() {
     let log = slog::Logger::root(drain, o!());
 
     let (tx, rx) = crossbeam_channel::bounded(0);
+    let (broadcast_tx, broadcast_rx) = broadcast_channel::bounded();
 
-    action_handler(rx, log.clone());
+    action_handler(rx, broadcast_tx, log.clone());
 
     register_hotkeys(tx.clone());
 
     ticker(tx.clone());
 
-    websocket_listener("0.0.0.0:8090".parse().unwrap(), tx, log);
+    websocket_listener("0.0.0.0:8090".parse().unwrap(), tx, broadcast_rx, log);
 }
 
 fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
@@ -83,7 +97,11 @@ fn ticker(tx: Sender<Action>) -> JoinHandle<()> {
     })
 }
 
-fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
+fn action_handler(
+    rx: Receiver<Action>,
+    broadcast: broadcast_channel::Sender<ClientOutput>,
+    log: Logger,
+) -> JoinHandle<()> {
     spawn(move || {
         let mut enigo = Enigo::new();
         let mut input_enabled: bool = true;
@@ -91,7 +109,6 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
         let (mut last_mouse_x, mut last_mouse_y) = Enigo::mouse_location();
         let mut last_mouse_left_button_down = false;
         let mut last_mouse_right_button_down = false;
-
 
         for action in rx {
             match action {
@@ -140,8 +157,22 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
                         warn!(log, "unexpected mouse move"; "dx"=>mx-last_mouse_x, "dy"=>last_mouse_y-my);
                     }
 
-                    if mouse_delta_x != 0 || mouse_delta_y != 0 || last_mouse_left_button_down != mouse_left_button_down || last_mouse_right_button_down != mouse_right_button_down {
+                    let changed = mouse_delta_x != 0
+                        || mouse_delta_y != 0
+                        || last_mouse_left_button_down != mouse_left_button_down
+                        || last_mouse_right_button_down != mouse_right_button_down;
+
+                    if changed {
                         debug!(log, "step"; "dx" => mouse_delta_x, "dy"=>mouse_delta_x, "lb"=>mouse_left_button_down, "rb"=>mouse_right_button_down);
+
+                        broadcast
+                            .send(ClientOutput::Output {
+                                dx: mouse_delta_x,
+                                dy: mouse_delta_y,
+                                lb: mouse_left_button_down,
+                                rb: mouse_right_button_down,
+                            })
+                            .unwrap();
                     }
 
                     if input_enabled && MOUSE_ENABLED {
@@ -171,65 +202,82 @@ fn action_handler(rx: Receiver<Action>, log: Logger) -> JoinHandle<()> {
     })
 }
 
-fn websocket_listener(address: SocketAddr, tx: Sender<Action>, log: Logger) {
+fn websocket_listener(
+    address: SocketAddr,
+    tx: Sender<Action>,
+    broadcast_rx: broadcast_channel::Receiver<ClientOutput>,
+    log: Logger,
+) {
     let server = TcpListener::bind(address).unwrap();
     for stream in server.incoming() {
         let tx = tx.clone();
+        let broadcast_rx = broadcast_rx.clone();
         let stream = stream.unwrap();
         let peer_addr = stream.peer_addr().unwrap().to_string();
         let log = log.new(o!("peer_addr" => peer_addr.clone()));
 
         info!(log, "Incoming connection");
 
+        stream.set_nonblocking(true).unwrap();
+
         spawn(move || {
             let mut websocket = accept(stream).unwrap();
 
             loop {
-                let msg = websocket.read_message().unwrap();
-
-                if msg.is_ping() {
-                    // Do nothing, pings are handled automatically
-                } else if msg.is_binary() {
-                    info!(log, "Unexpected binary message");
-                } else if msg.is_text() {
-                    let input: serde_json::error::Result<ClientInput> =
-                        serde_json::from_str(msg.to_text().unwrap());
-
-                    match input {
-                        Ok(ClientInput::Mouse { dx, dy, btns }) => {
-                            tx.send(Action::Mouse {
-                                client_id: peer_addr.clone(),
-                                delta_x: dx,
-                                delta_y: dy,
-                                left_button_down: get_bit_at(btns, 0),
-                                right_button_down: get_bit_at(btns, 1),
-                            })
+                match broadcast_rx.recv_timeout(Duration::from_millis(10)) {
+                    Ok(msg) => {
+                        websocket
+                            .write_message(Message::text(serde_json::to_string(&msg).unwrap()))
                             .unwrap();
-                        }
-                        Ok(ClientInput::KeyDown { code }) => {
-                            if let Some(key) = translate_key_code(&code) {
-                                tx.send(Action::KeyDown {
+                    }
+                    Err(_) => {}
+                }
+
+                while let Ok(msg) = websocket.read_message() {
+                    if msg.is_ping() {
+                        // Do nothing, pings are handled automatically
+                    } else if msg.is_binary() {
+                        info!(log, "Unexpected binary message");
+                    } else if msg.is_text() {
+                        let input: serde_json::error::Result<ClientInput> =
+                            serde_json::from_str(msg.to_text().unwrap());
+
+                        match input {
+                            Ok(ClientInput::Mouse { dx, dy, btns }) => {
+                                tx.send(Action::Mouse {
                                     client_id: peer_addr.clone(),
-                                    key,
+                                    delta_x: dx,
+                                    delta_y: dy,
+                                    left_button_down: get_bit_at(btns, 0),
+                                    right_button_down: get_bit_at(btns, 1),
                                 })
                                 .unwrap();
-                            } else {
-                                warn!(log, "Unsupported key"; "code" => code)
                             }
-                        }
-                        Ok(ClientInput::KeyUp { code }) => {
-                            if let Some(key) = translate_key_code(&code) {
-                                tx.send(Action::KeyUp {
-                                    client_id: peer_addr.clone(),
-                                    key,
-                                })
-                                .unwrap();
-                            } else {
-                                warn!(log, "Unsupported key"; "code" => code)
+                            Ok(ClientInput::KeyDown { code }) => {
+                                if let Some(key) = translate_key_code(&code) {
+                                    tx.send(Action::KeyDown {
+                                        client_id: peer_addr.clone(),
+                                        key,
+                                    })
+                                    .unwrap();
+                                } else {
+                                    warn!(log, "Unsupported key"; "code" => code)
+                                }
                             }
-                        }
-                        Err(err) => {
-                            warn!(log, "Bad input"; "text" => msg.to_text().unwrap(), "err" => err.to_string());
+                            Ok(ClientInput::KeyUp { code }) => {
+                                if let Some(key) = translate_key_code(&code) {
+                                    tx.send(Action::KeyUp {
+                                        client_id: peer_addr.clone(),
+                                        key,
+                                    })
+                                    .unwrap();
+                                } else {
+                                    warn!(log, "Unsupported key"; "code" => code)
+                                }
+                            }
+                            Err(err) => {
+                                warn!(log, "Bad input"; "text" => msg.to_text().unwrap(), "err" => err.to_string());
+                            }
                         }
                     }
                 }
