@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, time::Duration};
 
-use crossbeam_channel::{RecvError, SendError, TryRecvError, TrySendError};
+use crossbeam_channel::{RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError};
 
 pub fn bounded<T>() -> (Sender<T>, Receiver<T>) where T: Clone {
     let (tx, rx) = crossbeam_channel::bounded(1);
@@ -70,6 +70,10 @@ impl<T> Receiver<T>
     
     pub fn try_recv(&self) -> Result<T, TryRecvError> {
         self.channel.try_recv()
+    }
+
+    pub fn recv_timeout(&self, timeout: Duration) -> Result<T, RecvTimeoutError> {
+        self.channel.recv_timeout(timeout)
     }
 }
 
