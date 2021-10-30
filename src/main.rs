@@ -8,7 +8,7 @@ mod input_combiner;
 mod weighted_average;
 
 use crossbeam_channel::{Receiver, Sender};
-use enigo::{Enigo, Key, KeyboardControllable, MouseControllable};
+use enigo::{Enigo, Key, MouseControllable};
 use hotkey;
 use serde::{Deserialize, Serialize};
 use slog::{Drain, Logger};
@@ -77,6 +77,7 @@ fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
 
 fn ticker(tx: Sender<Action>) -> JoinHandle<()> {
     spawn(move || loop {
+        // TODO Convert to crossbeam_channel::tick and make frequency configurable
         thread::sleep(Duration::from_millis(100));
         tx.send(Action::Tick).unwrap();
     })
