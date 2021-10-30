@@ -513,22 +513,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3831453b3449ceb48b6d9c7ad7c96d5ea673e9b470a1dc578c2ce6521230884c"
 
 [[package]]
-name = "plays"
-version = "0.1.0"
-dependencies = [
- "conv",
- "crossbeam-channel",
- "enigo",
- "hotkey",
- "serde",
- "serde_json",
- "slog",
- "slog-async",
- "slog-term",
- "tungstenite",
-]
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -637,6 +621,22 @@ dependencies = [
  "blake2b_simd",
  "constant_time_eq",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "rust-plays"
+version = "0.1.0"
+dependencies = [
+ "conv",
+ "crossbeam-channel",
+ "enigo",
+ "hotkey",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-async",
+ "slog-term",
+ "tungstenite",
 ]
 
 [[package]]
