@@ -15,7 +15,7 @@ use slog::{Drain, Logger};
 use std::net::{SocketAddr, TcpListener};
 use std::thread::{self, spawn, JoinHandle};
 use std::time::Duration;
-use tungstenite::server::accept;
+use tungstenite::accept;
 use tungstenite::Message;
 
 #[derive(Serialize, Deserialize)]
