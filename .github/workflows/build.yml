@@ -1,0 +1,41 @@
+on: [push]
+
+name: Build
+
+jobs:
+  cargo:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - 1.42.0 # Minimum supported Rust version
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --manifest-path Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all --manifest-path Cargo.toml -- --check
+
+      # Disabled until clippy warnings are fixed
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --manifest-path Cargo.toml -- -D warnings
