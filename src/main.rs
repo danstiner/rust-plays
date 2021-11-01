@@ -105,7 +105,6 @@ fn action_handler(
         let mut enigo = Enigo::new();
         let mut input_enabled: bool = true;
         let mut input_combiner = input_combiner::InputCombiner::new();
-        let (mut last_mouse_x, mut last_mouse_y) = Enigo::mouse_location();
         let mut last_mouse_left_button_down = false;
         let mut last_mouse_right_button_down = false;
 
@@ -151,11 +150,6 @@ fn action_handler(
                         mouse_right_button_down,
                     } = input_combiner.step();
 
-                    let (mx, my) = Enigo::mouse_location();
-                    if mx != last_mouse_x || my != last_mouse_y {
-                        warn!(log, "unexpected mouse move"; "dx"=>mx-last_mouse_x, "dy"=>last_mouse_y-my);
-                    }
-
                     let changed = mouse_delta_x != 0
                         || mouse_delta_y != 0
                         || last_mouse_left_button_down != mouse_left_button_down
@@ -190,9 +184,6 @@ fn action_handler(
                         }
                     }
 
-                    let (mx, my) = Enigo::mouse_location();
-                    last_mouse_x = mx;
-                    last_mouse_y = my;
                     last_mouse_left_button_down = mouse_left_button_down;
                     last_mouse_right_button_down = mouse_right_button_down;
                 }
