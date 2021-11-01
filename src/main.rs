@@ -10,7 +10,6 @@ mod weighted_average;
 
 use crossbeam_channel::{Receiver, Sender};
 use enigo::{Enigo, Key, MouseControllable};
-use hotkey;
 use serde::{Deserialize, Serialize};
 use slog::{Drain, Logger};
 use std::net::{SocketAddr, TcpListener};
@@ -224,13 +223,10 @@ fn websocket_listener(
             let mut websocket = accept(stream).unwrap();
 
             loop {
-                match broadcast_rx.recv_timeout(Duration::from_millis(10)) {
-                    Ok(msg) => {
-                        websocket
-                            .write_message(Message::text(serde_json::to_string(&msg).unwrap()))
-                            .unwrap();
-                    }
-                    Err(_) => {}
+                if let Ok(msg) = broadcast_rx.recv_timeout(Duration::from_millis(10)) {
+                    websocket
+                        .write_message(Message::text(serde_json::to_string(&msg).unwrap()))
+                        .unwrap();
                 }
 
                 while let Ok(msg) = websocket.read_message() {

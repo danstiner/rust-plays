@@ -1,10 +1,10 @@
 use std::{sync::{Arc, Mutex}, time::Duration};
 
-use crossbeam_channel::{RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError};
+use crossbeam_channel::{RecvTimeoutError, SendError, TrySendError};
 
 pub fn bounded<T>() -> (Sender<T>, Receiver<T>) where T: Clone {
     let (tx, rx) = crossbeam_channel::bounded(1);
-    Data::new(tx, rx)
+    Data::from_channel(tx, rx)
 }
 
 /// Multi-receiver broadcast for messages.
@@ -14,13 +14,13 @@ struct Data<T> {
 }
 
 impl<T> Data<T> {
-    fn new(tx: crossbeam_channel::Sender<T>, rx: crossbeam_channel::Receiver<T>) -> (Sender<T>, Receiver<T>) where T: Clone {
+    fn from_channel(tx: crossbeam_channel::Sender<T>, rx: crossbeam_channel::Receiver<T>) -> (Sender<T>, Receiver<T>) where T: Clone {
         let data = Arc::new(Mutex::new(Data { channels: vec![tx] }));
         let sender = Sender {
             data: Arc::clone(&data),
         };
         let receiver = Receiver {
-            data: data,
+            data,
             channel: rx,
         };
         (sender, receiver)
@@ -64,14 +64,6 @@ pub struct Receiver<T> {
 
 impl<T> Receiver<T>
 {
-    pub fn recv(&self) -> Result<T, RecvError> {
-        self.channel.recv()
-    }
-    
-    pub fn try_recv(&self) -> Result<T, TryRecvError> {
-        self.channel.try_recv()
-    }
-
     pub fn recv_timeout(&self, timeout: Duration) -> Result<T, RecvTimeoutError> {
         self.channel.recv_timeout(timeout)
     }
@@ -97,7 +89,7 @@ mod tests {
         let (sender, receiver) = bounded();
         sender.send("test1").unwrap();
         sender.send("test2").unwrap();
-        assert_eq!(receiver.recv(), Ok("test1"));
+        assert_eq!(receiver.recv_timeout(Duration::from_secs(0)), Ok("test1"));
     }
 
     #[test]
@@ -106,7 +98,7 @@ mod tests {
         let receiver2 = receiver1.clone();
         sender.send("test1").unwrap();
         sender.send("test2").unwrap();
-        assert_eq!(receiver1.recv(), Ok("test1"));
-        assert_eq!(receiver2.recv(), Ok("test1"));
+        assert_eq!(receiver1.recv_timeout(Duration::from_secs(0)), Ok("test1"));
+        assert_eq!(receiver2.recv_timeout(Duration::from_secs(0)), Ok("test1"));
     }
 }

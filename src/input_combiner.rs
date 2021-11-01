@@ -17,8 +17,8 @@ pub struct InputChannel {
 }
 
 impl InputChannel {
-    pub fn key_down(&mut self, key: enigo::Key) {}
-    pub fn key_up(&mut self, key: enigo::Key) {}
+    pub fn key_down(&mut self, _key: enigo::Key) {}
+    pub fn key_up(&mut self, _key: enigo::Key) {}
     pub fn mouse_move_relative(
         &mut self,
         delta_x: i32,
@@ -72,7 +72,7 @@ impl InputCombiner {
         let id = id.into();
         let data = self
             .channel_data
-            .entry(id.clone())
+            .entry(id)
             .or_insert_with(|| Rc::new(RefCell::new(ChannelData::new())));
         InputChannel {
             data: Rc::clone(data),
@@ -85,8 +85,8 @@ impl InputCombiner {
         let mut mouse_left_button_down = WeightedBool::new(count as f64);
         let mut mouse_right_button_down = WeightedBool::new(count as f64);
 
-        for (_id, data) in &mut self.channel_data {
-            let mut data: RefMut<ChannelData> = (**data).borrow_mut();
+        for data in &mut self.channel_data.values_mut() {
+            let mut data: RefMut<ChannelData> = data.borrow_mut();
 
             avg_mouse_delta_x.add(data.mouse_delta_x.into(), 1.0);
             avg_mouse_delta_y.add(data.mouse_delta_y.into(), 1.0);
