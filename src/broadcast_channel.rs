@@ -1,8 +1,14 @@
-use std::{sync::{Arc, Mutex}, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use crossbeam_channel::{RecvTimeoutError, SendError, TrySendError};
 
-pub fn bounded<T>() -> (Sender<T>, Receiver<T>) where T: Clone {
+pub fn bounded<T>() -> (Sender<T>, Receiver<T>)
+where
+    T: Clone,
+{
     let (tx, rx) = crossbeam_channel::bounded(1);
     Data::from_channel(tx, rx)
 }
@@ -14,15 +20,18 @@ struct Data<T> {
 }
 
 impl<T> Data<T> {
-    fn from_channel(tx: crossbeam_channel::Sender<T>, rx: crossbeam_channel::Receiver<T>) -> (Sender<T>, Receiver<T>) where T: Clone {
+    fn from_channel(
+        tx: crossbeam_channel::Sender<T>,
+        rx: crossbeam_channel::Receiver<T>,
+    ) -> (Sender<T>, Receiver<T>)
+    where
+        T: Clone,
+    {
         let data = Arc::new(Mutex::new(Data { channels: vec![tx] }));
         let sender = Sender {
             data: Arc::clone(&data),
         };
-        let receiver = Receiver {
-            data,
-            channel: rx,
-        };
+        let receiver = Receiver { data, channel: rx };
         (sender, receiver)
     }
 }
@@ -62,8 +71,7 @@ pub struct Receiver<T> {
     channel: crossbeam_channel::Receiver<T>,
 }
 
-impl<T> Receiver<T>
-{
+impl<T> Receiver<T> {
     pub fn recv_timeout(&self, timeout: Duration) -> Result<T, RecvTimeoutError> {
         self.channel.recv_timeout(timeout)
     }

@@ -2,7 +2,7 @@ use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::weighted_average::{WeightedMean, WeightedBool};
+use crate::weighted_average::{WeightedBool, WeightedMean};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct Output {
