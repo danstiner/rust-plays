@@ -7,11 +7,9 @@ extern crate slog_async;
 extern crate slog_term;
 extern crate tokio;
 
-use enigo::{Enigo, Key, MouseControllable};
-use futures::StreamExt;
+use enigo::{Enigo, MouseControllable};
 use rust_plays::ClientOutput;
-use slog::{Drain, Logger};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use slog::Drain;
 use tungstenite::connect;
 use url::Url;
 
@@ -80,33 +78,5 @@ fn main() {
                 }
             }
         }
-    }
-}
-
-fn translate_key_code(code: &str) -> Option<Key> {
-    match code {
-        "KeyW" => Some(Key::Layout('w')),
-        "KeyA" => Some(Key::Layout('a')),
-        "KeyS" => Some(Key::Layout('s')),
-        "KeyD" => Some(Key::Layout('d')),
-        "KeyQ" => Some(Key::Layout('q')),
-        "KeyE" => Some(Key::Layout('e')),
-        "KeyR" => Some(Key::Layout('r')),
-        "Enter" => Some(Key::Return),
-        "Space" => Some(Key::Space),
-        "ArrowUp" => Some(Key::UpArrow),
-        "ArrowLeft" => Some(Key::LeftArrow),
-        "ArrowRight" => Some(Key::RightArrow),
-        "ArrowDown" => Some(Key::DownArrow),
-        "Digit1" => Some(Key::Layout('1')),
-        "Digit2" => Some(Key::Layout('2')),
-        "Digit3" => Some(Key::Layout('3')),
-        "Digit4" => Some(Key::Layout('4')),
-        "Digit5" => Some(Key::Layout('5')),
-        "Digit6" => Some(Key::Layout('6')),
-        "Digit7" => Some(Key::Layout('7')),
-        "Digit8" => Some(Key::Layout('8')),
-        "Digit9" => Some(Key::Layout('9')),
-        _ => None,
     }
 }
