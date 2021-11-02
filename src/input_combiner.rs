@@ -106,6 +106,12 @@ impl InputCombiner {
     }
 }
 
+impl Default for InputCombiner {
+    fn default() -> Self {  
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
