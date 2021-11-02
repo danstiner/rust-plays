@@ -69,8 +69,8 @@ canvas {
         function mouseMoved(e) {
             send({
                 type: "Mouse",
-                dx: e.movementX,
-                dy: e.movementY,
+                dx: e.movementX * window.devicePixelRatio,
+                dy: e.movementY * window.devicePixelRatio,
                 btns: e.buttons,
             });
             drawPointer(e.movementX + canvas.width / 2, e.movementY + canvas.height / 2);
@@ -87,7 +87,7 @@ canvas {
         let socket = undefined
 
         function connect() {
-            socket = new WebSocket("ws://localhost:8090");
+            socket = new WebSocket("ws://" + window.location.hostname + ":8090");
 
             socket.onopen = function(e) {
                 console.log("[open] Connection established");

@@ -12,23 +12,21 @@ use futures::StreamExt;
 use rust_plays::ClientOutput;
 use slog::{Drain, Logger};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_tungstenite::connect_async;
+use tungstenite::connect;
+use url::Url;
 
 const MOUSE_ENABLED: bool = true;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let drain = slog_async::Async::new(drain).build().fuse();
     let log = slog::Logger::root(drain, o!());
 
-    let url = url::Url::parse("ws://localhost:8090/").unwrap();
+    let url = Url::parse("ws://localhost:8090").unwrap();
 
-    let (stream, _) = connect_async(url).await.expect("Failed to connect");
+    let (mut socket, _) = connect(url).expect("Failed to connect");
     println!("WebSocket handshake has been successfully completed");
-
-    let (_write, mut read) = stream.split();
 
     let mut last_mouse_left_button_down = false;
     let mut last_mouse_right_button_down = false;
@@ -36,12 +34,8 @@ async fn main() {
 
     let mut enigo = Enigo::new();
 
-    while let Some(msg) = read.next().await {
-        if let Err(_) = msg {
-            continue;
-        }
-
-        let msg = msg.unwrap();
+    loop {
+        let msg = socket.read_message().expect("Error reading message");
 
         if msg.is_ping() {
             // Do nothing, pings are handled automatically

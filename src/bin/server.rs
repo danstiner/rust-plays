@@ -67,7 +67,7 @@ fn register_hotkeys(tx: Sender<Action>) -> JoinHandle<()> {
 fn ticker(tx: Sender<Action>) -> JoinHandle<()> {
     spawn(move || loop {
         // TODO Convert to crossbeam_channel::tick and make frequency configurable
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(20));
         tx.send(Action::Tick).unwrap();
     })
 }
