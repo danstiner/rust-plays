@@ -10,10 +10,14 @@ edition = "2018"
 conv = "0.3.3"
 crossbeam-channel = "0.5.1"
 enigo = "0.0.14"
+futures = "0.3"
 hotkey = "0.3.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 slog = "2.6.0"
 slog-async = "2.6.0"
 slog-term = "2.6.0"
+tokio = { version = "1.13.0", features = ["full"] }
+tokio-tungstenite = { version = "0.15.0", features = ["rustls-tls"] }
 tungstenite = "0.15.0"
+url = "2.2.2"

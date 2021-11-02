@@ -1,41 +1,19 @@
 extern crate conv;
+extern crate rust_plays;
 #[macro_use]
 extern crate slog;
 extern crate slog_async;
 extern crate slog_term;
 
-mod broadcast_channel;
-mod input_combiner;
-mod weighted_average;
-
 use crossbeam_channel::{Receiver, Sender};
-use enigo::{Enigo, Key, MouseControllable};
-use serde::{Deserialize, Serialize};
+use enigo::Key;
+use rust_plays::{broadcast_channel, input_combiner, ClientInput, ClientOutput};
 use slog::{Drain, Logger};
 use std::net::{SocketAddr, TcpListener};
 use std::thread::{self, spawn, JoinHandle};
 use std::time::Duration;
 use tungstenite::accept;
 use tungstenite::Message;
-
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type")]
-enum ClientInput {
-    Mouse { dx: i32, dy: i32, btns: u16 },
-    KeyDown { code: String },
-    KeyUp { code: String },
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy)]
-#[serde(tag = "type")]
-enum ClientOutput {
-    Output {
-        dx: i32,
-        dy: i32,
-        lb: bool,
-        rb: bool,
-    },
-}
 
 enum Action {
     Mouse {
@@ -56,8 +34,6 @@ enum Action {
     Tick,
     ToggleInput,
 }
-
-const MOUSE_ENABLED: bool = false;
 
 fn main() {
     let decorator = slog_term::TermDecorator::new().build();
@@ -102,7 +78,6 @@ fn action_handler(
     log: Logger,
 ) -> JoinHandle<()> {
     spawn(move || {
-        let mut enigo = Enigo::new();
         let mut input_enabled: bool = true;
         let mut input_combiner = input_combiner::InputCombiner::new();
         let mut last_mouse_left_button_down = false;
@@ -156,7 +131,7 @@ fn action_handler(
                         || last_mouse_right_button_down != mouse_right_button_down;
 
                     if changed {
-                        debug!(log, "step"; "dx" => mouse_delta_x, "dy"=>mouse_delta_x, "lb"=>mouse_left_button_down, "rb"=>mouse_right_button_down);
+                        debug!(log, "step"; "dx" => mouse_delta_x, "dy"=>mouse_delta_y, "lb"=>mouse_left_button_down, "rb"=>mouse_right_button_down);
 
                         broadcast
                             .send(ClientOutput::Output {
@@ -166,22 +141,6 @@ fn action_handler(
                                 rb: mouse_right_button_down,
                             })
                             .unwrap();
-                    }
-
-                    if input_enabled && MOUSE_ENABLED {
-                        enigo.mouse_move_relative(mouse_delta_x, mouse_delta_y);
-
-                        if mouse_left_button_down && !last_mouse_left_button_down {
-                            enigo.mouse_down(enigo::MouseButton::Left)
-                        } else if !mouse_left_button_down && last_mouse_left_button_down {
-                            enigo.mouse_up(enigo::MouseButton::Left)
-                        }
-
-                        if mouse_right_button_down && !last_mouse_right_button_down {
-                            enigo.mouse_down(enigo::MouseButton::Right)
-                        } else if !mouse_right_button_down && last_mouse_right_button_down {
-                            enigo.mouse_up(enigo::MouseButton::Right)
-                        }
                     }
 
                     last_mouse_left_button_down = mouse_left_button_down;
