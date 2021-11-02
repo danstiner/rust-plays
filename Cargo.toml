@@ -1,5 +1,5 @@
 [package]
-name = "plays"
+name = "rust-plays"
 version = "0.1.0"
 authors = ["Daniel Stiner <daniel.stiner@gmail.com>"]
 edition = "2018"
@@ -8,11 +8,16 @@ edition = "2018"
 
 [dependencies]
 conv = "0.3.3"
+crossbeam-channel = "0.5.1"
 enigo = "0.0.14"
+futures = "0.3"
 hotkey = "0.3.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 slog = "2.6.0"
 slog-async = "2.6.0"
 slog-term = "2.6.0"
-tungstenite = "0.12.0"
+tokio = { version = "1.13.0", features = ["full"] }
+tokio-tungstenite = { version = "0.15.0", features = [] }
+tungstenite = "0.15.0"
+url = "2.2.2"

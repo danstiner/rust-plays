@@ -3,65 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
-    <script type = "text/javascript">
-        let socket = new WebSocket("ws://localhost:8080");
+    <style>
+html, body {
+	margin: 0;
+	padding: 0;
+}
 
-        socket.onopen = function(e) {
-            console.log("[open] Connection established");
-
-            function send(payload) {
-                socket.send(JSON.stringify(payload));
-            }
-
-            function onmouse(e) {
-                send({
-                    type: "Mouse",
-                    x: e.clientX / window.innerWidth,
-                    y: e.clientY / window.innerHeight,
-                    b: e.buttons,
-                });
-            };
-            onmousemove = onmouse;
-            onmousedown = onmouse;
-            onmouseup = onmouse;
-
-            onkeydown = function(e) {
-                const code = e.code;
-                socket.send(JSON.stringify({
-                    "type": "KeyDown",
-                    code,
-                }));
-            };
-
-            onkeyup = function(e) {
-                const code = e.code;
-                socket.send(JSON.stringify({
-                    "type": "KeyUp",
-                    code,
-                }));
-            };
-        };
-
-        socket.onmessage = function(event) {
-            console.log(`[message] Data received from server: ${event.data}`);
-        };
-
-        socket.onclose = function(event) {
-            if (event.wasClean) {
-                console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
-            } else {
-                // e.g. server process killed or network down
-                // event.code is usually 1006 in this case
-                console.log('[close] Connection died');
-            }
-        };
-
-        socket.onerror = function(error) {
-            console.log(`[error] ${error.message}`);
-        };
-    </script>
+canvas {
+	display: block;
+	margin: 0 auto;
+	border: 1px solid black;
+}
+    </style>
 </head>
 <body>
+    <canvas width="360" height="360">
+        Your browser does not support HTML5 canvas
+    </canvas>
+    <p>
+        Click above to capture input. Then hit escape to stop.
+    </p>
+    <script type = "text/javascript">
+        const POINTER_RADIUS = 20;
 
+        let canvas = document.querySelector('canvas');
+        let contex = canvas.getContext('2d');
+
+        function degToRad(degrees) {
+            var result = Math.PI / 180 * degrees;
+            return result;
+        }
+
+        function drawPointer(x, y) {
+            contex.fillStyle = "white";
+            contex.fillRect(0, 0, canvas.width, canvas.height);
+            contex.fillStyle = "black";
+            contex.beginPath();
+            contex.arc(x, y, POINTER_RADIUS, 0, degToRad(360), true);
+            contex.fill();
+        }
+
+        canvas.onclick = function(e) {
+            if (document.pointerLockElement !== canvas) {
+                canvas.requestPointerLock();
+            }
+        };
+
+        document.addEventListener('pointerlockchange', lockChangeAlert, false);
+
+        function lockChangeAlert() {
+            if (document.pointerLockElement === canvas) {
+                console.log('The pointer lock status is now locked');
+                document.addEventListener("mousemove", mouseMoved, false);
+                document.addEventListener("mouseup", mouseMoved, false);
+                document.addEventListener("mousedown", mouseMoved, false);
+                drawPointer(canvas.width / 2, canvas.height / 2);
+            } else {
+                console.log('The pointer lock status is now unlocked');  
+                document.removeEventListener("mousemove", mouseMoved, false);
+                document.removeEventListener("mouseup", mouseMoved, false);
+                document.removeEventListener("mousedown", mouseMoved, false);
+            }
+        }
+
+        function mouseMoved(e) {
+            send({
+                type: "Mouse",
+                dx: e.movementX * window.devicePixelRatio,
+                dy: e.movementY * window.devicePixelRatio,
+                btns: e.buttons,
+            });
+            drawPointer(e.movementX + canvas.width / 2, e.movementY + canvas.height / 2);
+        }
+
+        const WEBSOCKET_READYSTATE_OPEN = 1;
+
+        function send(payload) {
+            if (socket && socket.readyState === WEBSOCKET_READYSTATE_OPEN) {
+                socket.send(JSON.stringify(payload));
+            }
+        }
+
+        let socket = undefined
+
+        function connect() {
+            socket = new WebSocket("ws://" + window.location.hostname + ":8090");
+
+            socket.onopen = function(e) {
+                console.log("[open] Connection established");
+            };
+
+            socket.onmessage = function(event) {
+                console.log(`[message] Data received from server: ${event.data}`);
+            };
+
+            socket.onclose = function(event) {
+                if (event.wasClean) {
+                    console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+                } else {
+                    // e.g. server process killed or network down
+                    // event.code is usually 1006 in this case
+                    console.log('[close] Connection died');
+                }
+
+                setTimeout(connect, 5000);
+            };
+
+            socket.onerror = function(error) {
+                console.log(`[error] ${error.message}`);
+            };
+        }
+
+        connect();
+    </script>
 </body>
 </html>
